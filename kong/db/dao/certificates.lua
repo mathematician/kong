@@ -90,11 +90,18 @@ function _Certificates:update_with_name_list(cert_pk, cert)
       return nil, err, err_t
     end
   end
-  cert.server_names = name_list or cjson.empty_array
 
   if name_list then
-    local ok, err, err_t = db.server_names:update_list(cert, name_list)
+    cert.server_names = name_list
+
+    local ok, err, err_t = db.server_names:update_list(cert_pk, name_list)
     if not ok then
+      return nil, err, err_t
+    end
+
+  else
+    cert.server_names, err, err_t = db.server_names:list_for_certificate(cert_pk)
+    if not cert.server_names then
       return nil, err, err_t
     end
   end
@@ -138,6 +145,27 @@ function _Certificates:select_with_name_list(cert_pk)
   end
 
   return cert
+end
+
+
+function _Certificates:page_with_name_list(size, offset)
+  local db = singletons.db
+  local certs, err, err_t, offset = self:page(size, offset)
+  if not certs then
+    return nil, err, err_t
+  end
+
+  for i=1, #certs do
+    local cert = certs[i]
+    local server_names, err, err_t =
+      db.server_names:list_for_certificate({ id = cert.id })
+    if not server_names then
+      return nil, err, err_t
+    end
+    cert.server_names = server_names
+  end
+
+  return certs, nil, nil, offset
 end
 
 

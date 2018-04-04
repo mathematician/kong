@@ -17,6 +17,25 @@ end
 
 return {
   ["/certificates"] = {
+    -- override to include the server_names list when getting all certificates
+    GET = function(self, db, helpers)
+      local data, _, err_t, offset =
+        db.certificates:page_with_name_list(self.args.size,
+                                            self.args.offset)
+      if not data then
+        return endpoints.handle_error(err_t)
+      end
+
+      local next_page = offset and string.format("/certificates?offset=%s",
+                                                 ngx.escape_uri(offset)) or ngx.null
+
+      return helpers.responses.send_HTTP_OK {
+        data   = data,
+        offset = offset,
+        next   = next_page,
+      }
+    end,
+
     -- override to accept the server_names param when creating a certificate
     POST = function(self, db, helpers)
       local data, _, err_t = db.certificates:insert_with_name_list(self.args.post)

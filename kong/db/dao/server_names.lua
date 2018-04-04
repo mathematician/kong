@@ -8,7 +8,7 @@ local singletons = require "kong.singletons"
 local function list_diff(list1, list2)
   local set2 = {}
   for i=1, #list2 do
-    set2[list1[i]] = true
+    set2[list2[i]] = true
   end
 
   local diff = {}
@@ -33,7 +33,8 @@ function _ServerNames:check_list_is_new(name_list)
   -- dont add the certificate or any names if we have an server name conflict
   -- its fairly inefficient that we have to loop twice over the datastore
   -- but no support for OR queries means we gotsta!
-  for _, name in ipairs(name_list) do
+  for i=1, #name_list do
+    local name = name_list[i]
     local row, err, err_t = singletons.db.server_names:select_by_name(name)
     if err then
       return nil, err, err_t
@@ -132,41 +133,27 @@ end
 -- Replaces the names of a given certificate
 -- It does not try to insert server names which are already inserted
 -- It does not try to delete server names which don't exist
-function _ServerNames:update_list(cert_pk, name_list)
+function _ServerNames:update_list(cert_pk, new_list)
   -- Get the names currently associated to the certificate
-  local current_name_list, err, err_t = self:list_for_certificate(cert_pk)
-  if not current_name_list then
+  local current_list, err, err_t = self:list_for_certificate(cert_pk)
+  if not current_list then
     return nil, err, err_t
   end
 
-  -- Delete the names on the current list which where not passed
-  local delete_list = list_diff(current_name_list, name_list)
+  local delete_list = list_diff(current_list, new_list)
+  local insert_list = list_diff(new_list, current_list)
+
+  local ok, err, err_t = self:insert_list(cert_pk, insert_list)
+  if not ok then
+    return nil, err, err_t
+  end
+
   -- ignoring errors here
   -- returning 4xx here risks invalid states and is confusing to the user
   self:delete_list(delete_list)
 
-  -- Insert the names passed which don't exist on the db
-  local insert_list = list_diff(name_list, current_name_list)
-  local ok, err, err_t = self:insert_list(insert_list)
-  if not ok then
-    return nil, err, err_t
-  end
-
   return 1
 end
-
-
-function _ServerNames:delete_by_name(name)
-  local ok, err, err_t = self.super.delete_by_name(self, name)
-  if not ok then
-    return nil, err, err_t
-  end
-
-  self:post_crud_event("delete", { name = name })
-
-  return ok, err, err_t
-end
-
 
 
 return _ServerNames

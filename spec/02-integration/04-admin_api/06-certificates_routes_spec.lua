@@ -64,6 +64,7 @@ describe("Admin API: #" .. strategy, function()
         assert.equal(1, #json.data)
         assert.is_string(json.data[1].cert)
         assert.is_string(json.data[1].key)
+        assert.same({ "bar.com", "foo.com" }, json.data[1].server_names)
       end)
     end)
 
@@ -162,7 +163,7 @@ describe("Admin API: #" .. strategy, function()
     end)
   end)
 
-  pending("/certificates/cert_id_or_server_name", function()
+  describe("/certificates/cert_id_or_server_name", function()
     before_each(function()
       assert(db:truncate())
       local res = client:post("/certificates", {
@@ -189,7 +190,7 @@ describe("Admin API: #" .. strategy, function()
 
         assert.is_string(json1.cert)
         assert.is_string(json1.key)
-        assert.same({ "foo.com", "bar.com" }, json1.server_names)
+        assert.same({ "bar.com", "foo.com" }, json1.server_names)
         assert.same(json1, json2)
       end)
 
@@ -278,9 +279,7 @@ describe("Admin API: #" .. strategy, function()
 
       it("updates server_names associated with a certificate", function()
         local res = client:patch("/certificates/" .. cert_foo.id, {
-          body    = {
-            server_names  = "baz.com",
-          },
+          body    = { server_names = "baz.com" },
           headers = { ["Content-Type"] = "application/x-www-form-urlencoded" },
         })
 
@@ -295,9 +294,7 @@ describe("Admin API: #" .. strategy, function()
         body = assert.res_status(200, res)
         json = cjson.decode(body)
         assert.equal(2, #json.data)
-        local names = {}
-        table.insert(names, json.data[1].name)
-        table.insert(names, json.data[2].name)
+        local names = { json.data[1].name, json.data[2].name }
         table.sort(names)
         assert.are.same( { "bar.com", "baz.com" } , names)
 
@@ -352,10 +349,10 @@ describe("Admin API: #" .. strategy, function()
           },
           headers = { ["Content-Type"] = "application/x-www-form-urlencoded" },
         })
-        local body = assert.res_status(409, res)
+        local body = assert.res_status(400, res)
         local json = cjson.decode(body)
 
-        assert.equals("duplicate Server Name in request: baz.com", json.message)
+        assert.equals("duplicate server name in request: baz.com", json.message)
 
         -- make sure number of server_names don't change
         res  = client:get("/server_names")
