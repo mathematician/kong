@@ -101,6 +101,8 @@ end
 
 _M.cassandra = {}
 
+local CASSANDRA_EXECUTE_OPTS = { consistency = cassandra.consistencies.all }
+
 --[[
 Copy all records from the table defined by source_table_def into
 destination_table_def. Both table_defs have the following structure
@@ -126,7 +128,7 @@ Example:
     id         = "id",
     cert       = "cert",
     key        = "key",
-   created_at = "created_at",
+    created_at = "created_at",
   }
 
 The function takes the "source row" as parameter, so it could be used to do things
@@ -137,8 +139,12 @@ function _M.cassandra.copy_records(dao,
                                    destination_table_def,
                                    columns_to_copy)
 
-  local coordinator = dao.db:get_coordinator()
-  local cql = fmt("SELECT * FROM %s ALLOW FILTERING", source_table_def.name)
+  local coordinator, err = dao.db:get_coordinator()
+  if not coordinator then
+    return nil, err
+  end
+
+  local cql = fmt("SELECT * FROM %s", source_table_def.name)
   for rows, err in coordinator:iterate(cql) do
     if err then
       return nil, err
@@ -180,7 +186,7 @@ function _M.cassandra.copy_records(dao,
                              destination_table_def.name,
                              table_concat(column_names, ", "),
                              question_marks)
-      local _, err = coordinator:execute(insert_cql, values, nil, "write")
+      local _, err = coordinator:execute(insert_cql, values, CASSANDRA_EXECUTE_OPTS)
       if err then
         return nil, err
       end
@@ -210,13 +216,13 @@ do
                     table_def.name,
                     column_declarations_cql,
                     primary_key_cql)
-    return coordinator:execute(cql, {}, nil, "write")
+    return coordinator:execute(cql, {}, CASSANDRA_EXECUTE_OPTS)
   end
 
 
-  local function drop_table(coordinator, table_name)
-    local cql = fmt("DROP TABLE %s;", table_name)
-    return coordinator:execute(cql, {}, nil, "write")
+  local function drop_table_if_exists(coordinator, table_name)
+    local cql = fmt("DROP TABLE IF EXISTS %s;", table_name)
+    return coordinator:execute(cql, {}, CASSANDRA_EXECUTE_OPTS)
   end
 
 
@@ -254,7 +260,10 @@ do
 
   function _M.cassandra.add_partition(dao, table_def)
 
-    local coordinator = dao.db:get_coordinator()
+    local coordinator, err = dao.db:get_coordinator()
+    if not coordinator then
+      return nil, err
+    end
 
     table_def = utils.deep_copy(table_def)
 
@@ -272,11 +281,10 @@ do
       return nil, err
     end
 
-    local _, err = drop_table(coordinator, table_def.name)
+    local _, err = drop_table_if_exists(coordinator, table_def.name)
     if err then
       return nil, err
     end
-    error("stop")
 
     table_def.columns.partition = "text"
     table.insert(table_def.partition_keys, 1, "partition")
@@ -291,7 +299,7 @@ do
       return nil, err
     end
 
-    local _, err = drop_table(coordinator, aux_table_def.name)
+    local _, err = drop_table_if_exists(coordinator, aux_table_def.name)
     if err then
       return nil, err
     end

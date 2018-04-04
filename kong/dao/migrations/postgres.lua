@@ -208,7 +208,7 @@ return {
         created_at timestamp without time zone default (CURRENT_TIMESTAMP(0) at time zone 'utc')
       );
 
-      CREATE TABLE ssl_servers_names(
+      CREATE TABLE IF NOT EXISTS ssl_servers_names(
         name text PRIMARY KEY,
         ssl_certificate_id uuid REFERENCES ssl_certificates(id) ON DELETE CASCADE,
         created_at timestamp without time zone default (CURRENT_TIMESTAMP(0) at time zone 'utc')
