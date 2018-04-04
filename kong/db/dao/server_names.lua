@@ -92,12 +92,21 @@ end
 
 
 -- Deletes all server names on the given name list
-function _ServerNames:delete_list(name_list, ignore_errors)
+function _ServerNames:delete_list(name_list)
+  local err_list = {}
+  local errors_len = 0
+  local first_err_t = nil
   for i = 1, #name_list do
     local ok, err, err_t = self:delete_by_name(name_list[i])
-    if not ignore_errors and not ok then
-      return nil, err, err_t
+    if not ok then
+      errors_len = errors_len + 1
+      err_list[errors_len] = err
+      first_err_t = first_err_t or err_t
     end
+  end
+
+  if errors_len > 0 then
+    return nil, table.concat(err_list, ","), first_err_t
   end
 
   return 1
@@ -134,8 +143,7 @@ function _ServerNames:update_list(cert_pk, name_list)
   local delete_list = list_diff(current_name_list, name_list)
   -- ignoring errors here
   -- returning 4xx here risks invalid states and is confusing to the user
-  local ignore_errors = true
-  self:delete_list(delete_list, ignore_errors)
+  self:delete_list(delete_list)
 
   -- Insert the names passed which don't exist on the db
   local insert_list = list_diff(name_list, current_name_list)
