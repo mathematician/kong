@@ -32,10 +32,10 @@ local get_consumer_id = {
 local metrics = {
   request_count = function (api_name, message, metric_config, logger)
     local get_consumer_id = get_consumer_id[metric_config.consumer_identifier]
-    local consumer_id     = get_consumer_id(message.consumer)
     local stat = string_format("%s.request.count", api_name)
 
-    if consumer_id then
+    if message.consumer then
+      local consumer_id     = get_consumer_id(message.consumer)
       table.insert(metric_config.tags, "consumer_id:" .. consumer_id)
     end
 
